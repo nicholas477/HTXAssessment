@@ -1,6 +1,6 @@
 
 CXX = clang++
-CXX_FLAGS=-Iinclude/
+CXX_FLAGS=-Iinclude/ -Wall
 TARGET = htx_assessment
 
 SRC_FILES = $(wildcard src/*.cpp)
