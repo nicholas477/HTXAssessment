@@ -33,9 +33,9 @@ bool line_passes_through_location(const vec& lineStart, const vec& lineEnd, cons
 	return line_sphere_intersections(lineStart, lineEnd, sphereCenter, 1.f).num_intersections == 2;
 }
 
-// If the line is a parabola, a line passes WITHIN a foot of a location if the minimum distance
+// If the line is a parabola, the parabola passes WITHIN a foot of a location if the minimum distance
 // between the location and the parabola is less than a foot
-static bool parabola_passes_location(const vec& starting_position, const vec& launch_velocity, const vec& sphere_p, float sphere_r, const vec gravity)
+static bool parabola_passes_location(const vec& starting_position, const vec& launch_velocity, const vec& sphere_p, float sphere_r, const vec& gravity)
 {
 	// All 3d parabolic arcs are really 2d, so just find the two vectors that define the 2d plane of the arc
 	// TODO: reject straight line parabolas (parabolas where the X and Y basis vectors are parallel)
