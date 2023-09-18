@@ -3,10 +3,25 @@
 #include <array>
 #include <cmath>
 #include <sstream>
+#include <vector>
 
 struct vec
 {
-	float x, y, z;
+	union
+	{
+		struct
+		{
+			float x, y, z;
+		};
+		float xyz[3];
+	};
+
+	vec(float _x = 0.f, float _y = 0.f, float _z = 0.f)
+	    : x(_x)
+	    , y(_y)
+	    , z(_z)
+	{
+	}
 
 	float dist(const vec& other) const
 	{
@@ -19,12 +34,26 @@ struct vec
 
 	float length() const
 	{
-		return std::sqrt(x * x + y * y + z * z);
+		return std::sqrt(squared_length());
+	}
+
+	float squared_length() const
+	{
+		return x * x + y * y + z * z;
 	}
 
 	float dot(const vec& other) const
 	{
 		return (x * other.x) + (y * other.y) + (z * other.z);
+	}
+
+	vec cross(const vec& other) const
+	{
+		vec out;
+		out.xyz[0] = xyz[1] * other.xyz[2] - xyz[2] * other.xyz[1];
+		out.xyz[1] = -(xyz[0] * other.xyz[2] - xyz[2] * other.xyz[0]);
+		out.xyz[2] = xyz[0] * other.xyz[1] - xyz[1] * other.xyz[0];
+		return out;
 	}
 
 	std::string to_string() const
@@ -80,9 +109,18 @@ struct vec
 	}
 };
 
+static vec operator*(float lhs, const vec& rhs)
+{
+	vec out;
+	out.x = lhs * rhs.x;
+	out.y = lhs * rhs.y;
+	out.z = lhs * rhs.z;
+	return out;
+}
+
 // A plane that bisects 3d space infinitely.
-// Imagine this as a vector extending out from the origin, and the tip of that vector is where space is bisected in half
-// along a plane perpendicular to that vector
+// Imagine this as a normal vector based on the origin, multiplied by w. The tip of that vector is where space is
+// bisected in half along a plane orthogonal to that vector
 struct plane
 {
 	float x, y, z, w;
@@ -96,12 +134,21 @@ struct plane
 	}
 };
 
-
-// 4x4 matrix
-struct mat
+// Returns the distance between a point and a plane
+// Copied from unreal engine source code
+static float point_plane_distance(const vec& point, const vec& plane_base, const vec& plane_normal)
 {
-	std::array<float, 16> items;
-};
+	return (point - plane_base).dot(plane_normal);
+}
+
+// Projects a point onto a plane
+// Copied from unreal engine source code
+static vec point_plane_project(const vec& point, const vec& plane_base, const vec& plane_normal)
+{
+	//Find the distance of X from the plane
+	//Add the distance back along the normal from the point
+	return point - (point_plane_distance(point, plane_base, plane_normal) * plane_normal);
+}
 
 struct intersection_result
 {
@@ -172,56 +219,102 @@ static intersection_result line_sphere_intersections(const vec& line_start, cons
 	return result;
 }
 
-static intersection_result parabolic_arc_sphere_intersections(const vec& starting_position, const vec& launch_velocity, const vec& sphere_p, float sphere_r, const vec& gravity = vec {0.f, 0.f, -980.f})
+// Solves cubic equations in the form: x^3 + a*x^2 + b*x + c = 0
+// Only returns the real roots
+
+// http://math.ivanovo.ac.ru/dalgebra/Khashin/poly/index.html
+// return 3: 3 real roots vec[0], vec[1], vec[2]
+// return 1: 1 real root vec[0]. Does not return the other two complex roots
+static std::vector<double> SolveP3(double a, double b, double c)
 {
-	// All 3d parabolic arcs are really 2d, so just find the two vectors that define the 2d plane of the arc
-	const vec arc_up_vec      = gravity.normalize();
-	const vec arc_forward_vec = (launch_velocity - (arc_up_vec * arc_up_vec.dot(launch_velocity))).normalize();
+	constexpr double eps = 1e-14;
+	const double two_pi  = 6.28318530718;
 
-	// The arc up vector will define h and arc_forward_vector will define t
-	// The parabola is defined by h(t) = at^2 + bt + c
-	const float a = gravity.length();
-	const float b = arc_up_vec.dot(launch_velocity);
-	const float c = arc_up_vec.dot(starting_position);
+	double a2 = a * a;
+	double q  = (a2 - 3 * b) / 9;
+	double r  = (a * (2 * a2 - 9 * b) + 27 * c) / 54;
+	// equation y^3 - 3q*y + r/2 = 0 where x = y-a/3
+	if (fabs(q) < eps)
+	{
+		if (fabs(r) < eps)
+		{ // three identical roots
+			return {-a / 3};
+		}
+		return {std::cbrt(-r / 2)};
+	}
+	double r2 = r * r;
+	double q3 = q * q * q;
+	double A, B;
+	if (r2 <= (q3 + eps))
+	{
+		double t = r / sqrt(q3);
+		if (t < -1)
+			t = -1;
+		if (t > 1)
+			t = 1;
+		t = acos(t);
+		a /= 3;
+		q = -2 * sqrt(q);
+		return {q * cos(t / 3) - a, q * cos((t + two_pi) / 3) - a, q * cos((t - two_pi) / 3) - a};
+	}
+	else
+	{
+		A = -std::cbrt(fabs(r) + sqrt(r2 - q3));
+		if (r < 0)
+			A = -A;
+		B = (A == 0 ? 0 : B = q / A);
 
-	intersection_result result;
-
-	return result;
+		a /= 3;
+		if (fabs(0.5 * sqrt(3.) * (A - B)) < eps)
+		{
+			return {(A + B) - a, -0.5 * (A + B) - a};
+		}
+		return {(A + B) - a};
+	}
 }
 
-// Calculates the intersection between a parabola and a circle. This is in 2D
-static intersection_result parabola_circle_intersections(float a, float b, float c, const vec& center, float radius)
+// Returns the distance between a point (px, py) and a parabola y = ax^2 + bx + c
+static double parabola_point_distance(double a, double b, double c, double px, double py, double x)
 {
-	intersection_result result;
+	const double y = a * x * x + b * x + c;
+	return sqrt((px - x) * (px - x) + (py - y) * (py - y));
+}
 
-	// Calculate the discriminant of the quadratic equation
-	float discriminant = b * b - 4 * a * c;
+// Finds the minimum distance between a parabola and a point (px,py)
+// https://stackoverflow.com/questions/9800324/how-to-find-the-distance-between-a-point-and-a-parabola-in-code
+// Finds the real roots of the derivative of the squared distance function, and then returns the minimum distance
+//
+// TODO: add in code for rejecting distances with x < 0 since our parabola doesn't extend pass x < 0
+static double parabola_minimum_distance(double a, double b, double c, double px, double py)
+{
+	// Find the x^3, x^2, x coefficients
+	// Full equation for the derivative of distance squared is:
+	// 2bc - 2p(x) - 2bp(y) + 2x + 2b^2x + 4acx - 4axp(y) + 6abx^2 + 4a^2x^3
+	const double x_cube_coefficient = 4 * a * a;
+	double x_square_coefficient     = 6 * a * b;
+	double x_coefficient            = (4 * a * c) - (4 * a * py) + (2 * b * b) + 2;
+	double constants                = 2 * b * c - 2 * b * py - 2 * px;
 
-	if (discriminant >= 0)
+	// Change it to the form x^3 + ax^2 + bx + c by dividing by the x cubed coefficient
+	// We do this so we can feed it into the cubic equation solver
+	x_square_coefficient /= x_cube_coefficient;
+	x_coefficient /= x_cube_coefficient;
+	constants /= x_cube_coefficient;
+
+	// Now we have the roots of the derivative, so plug it back into the function and find the minimum distance
+	std::vector<double> roots = SolveP3(x_square_coefficient, x_coefficient, constants);
+	double min_distance       = parabola_point_distance(a, b, c, px, py, roots[0]);
+	for (int i = 1; i < roots.size(); ++i)
 	{
-		// Calculate the two possible x-values where the parabola intersects the circle
-		float x1 = (-b + sqrt(discriminant)) / (2 * a);
-		float x2 = (-b - sqrt(discriminant)) / (2 * a);
-
-		// Calculate the corresponding y-values
-		float y1 = a * x1 * x1 + b * x1 + c;
-		float y2 = a * x2 * x2 + b * x2 + c;
-
-		// Check if the intersection points are within the circle's boundary
-		float distance1 = sqrt(pow(x1 - center.x, 2) + pow(y1 - center.y, 2));
-		float distance2 = sqrt(pow(x2 - center.x, 2) + pow(y2 - center.y, 2));
-
-		if (distance1 <= radius)
-		{
-			result.intersections[result.num_intersections] = vec {x1, y1, 0.f};
-			result.num_intersections++;
-		}
-		if (distance2 <= radius)
-		{
-			result.intersections[result.num_intersections] = vec {x2, y2, 0.f};
-			result.num_intersections++;
-		}
+		min_distance = std::min(min_distance, parabola_point_distance(a, b, c, px, py, roots[i]));
 	}
 
-	return result;
+	return min_distance;
+}
+
+// Gets the radius of a sphere slice. The sphere slice is defined by the distance from the center of the sphere
+static double get_sphere_slice_radius(double dist_from_center, double sphere_r)
+{
+	const double cap_h = sphere_r - std::abs(dist_from_center);
+	return std::sqrt(cap_h * ((2 * sphere_r) - cap_h));
 }
