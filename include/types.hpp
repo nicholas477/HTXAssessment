@@ -80,6 +80,23 @@ struct vec
 	}
 };
 
+// A plane that bisects 3d space infinitely.
+// Imagine this as a vector extending out from the origin, and the tip of that vector is where space is bisected in half
+// along a plane perpendicular to that vector
+struct plane
+{
+	float x, y, z, w;
+
+	plane(const vec& base, const vec& normal)
+	{
+		x = normal.x;
+		y = normal.y;
+		z = normal.z;
+		w = base.dot(normal);
+	}
+};
+
+
 // 4x4 matrix
 struct mat
 {
@@ -151,6 +168,23 @@ static intersection_result line_sphere_intersections(const vec& line_start, cons
 		// No intersection
 		result.num_intersections = 0;
 	}
+
+	return result;
+}
+
+static intersection_result parabolic_arc_sphere_intersections(const vec& starting_position, const vec& launch_velocity, const vec& sphere_p, float sphere_r, const vec& gravity = vec {0.f, 0.f, -980.f})
+{
+	// All 3d parabolic arcs are really 2d, so just find the two vectors that define the 2d plane of the arc
+	const vec arc_up_vec      = gravity.normalize();
+	const vec arc_forward_vec = (launch_velocity - (arc_up_vec * arc_up_vec.dot(launch_velocity))).normalize();
+
+	// The arc up vector will define h and arc_forward_vector will define t
+	// The parabola is defined by h(t) = at^2 + bt + c
+	const float a = gravity.length();
+	const float b = arc_up_vec.dot(launch_velocity);
+	const float c = arc_up_vec.dot(starting_position);
+
+	intersection_result result;
 
 	return result;
 }
