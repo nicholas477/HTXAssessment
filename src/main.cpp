@@ -119,16 +119,16 @@ using FName = std::string;
 
 namespace particles
 {
-	// Particle prefab type. Multiple emitters can be of the same type.
-	// For example, if you had a fire particle emitter, it might be named "fire_01"
+	// Particle prefab type. This is put into a table that is looked up by
+	// emitter::create()
 	struct type
 	{
 		FName id;
 
 		struct description
 		{
-			// Num particles, velocities, lifetimes, etc here
-		};
+			// Num particles, velocities, lifetimes, is screenspace, etc here
+		} description;
 
 		bool operator==(const type& other)
 		{
@@ -142,11 +142,20 @@ namespace particles
 	public:
 		transform transform;
 
+		// Spawns the particles from the given particle type
 		bool create(FName type);
 		void release();
 
 		bool is_alive() const;
+
+		// If the emitter is in screenspace, then the transform is applied
+		// in screenspace
 		bool is_screenspace() const;
+
+		// Returns false if the emitter runs indefinitely
+		bool has_lifetime() const;
+
+		// Returns how much time is left before all particles are destroyed
 		float get_lifetime() const;
 	};
 
@@ -168,23 +177,74 @@ namespace particles
 
 // Question 5: Define a list of unit tests to validate an implementation of the particle system interface from the previous question.
 
-TEST(ParticleSystemTest, SpawnParticleEmitters)
+TEST(ParticleSystemTest, TestNewParticleType)
 {
 	particles::type new_particle_type;
-	new_particle_type.id = "particles/fire";
+	new_particle_type.id = "particles/test_duplicate_particles";
+
+	EXPECT_EQ(particles::manager::get().add_type(new_particle_type), true);
+	EXPECT_EQ(particles::manager::get().add_type(new_particle_type), false);
+}
+
+TEST(ParticleSystemTest, SpawnDestroyParticleEmitters)
+{
+	particles::type new_particle_type;
+	new_particle_type.id                        = "particles/fire";
+	new_particle_type.description.num_particles = 10;
+	new_particle_type.description.lifetimes     = 10.f;
 
 	EXPECT_EQ(particles::manager::get().add_type(new_particle_type), true);
 
 	particles::emitter emitter;
-	emitter.create("new_particle_type.id");
+	emitter.create(new_particle_type.id);
 	EXPECT_EQ(emitter.is_alive(), true);
 	EXPECT_EQ(emitter.get_lifetime() > 0.f, true);
+
+	emitter.release();
+	EXPECT_EQ(emitter.is_alive(), false);
 }
 
-
-// TODO: test transform
 TEST(ParticleSystemTest, TestParticleGroupTransform)
 {
+	particles::type new_screenspace_particle_type;
+	new_screenspace_particle_type.id                        = "particles/screenspace_test";
+	new_screenspace_particle_type.description.num_particles = 10;
+	new_screenspace_particle_type.description.lifetimes     = 10.f;
+	new_screenspace_particle_type.description.screenspace   = true;
+	EXPECT_EQ(particles::manager::get().add_type(new_screenspace_particle_type), true);
+
+	particles::emitter emitter;
+	emitter.create(new_screenspace_particle_type.id);
+	EXPECT_EQ(emitter.is_alive(), true);
+	EXPECT_EQ(emitter.get_lifetime() > 0.f, true);
+	EXPECT_EQ(emitter.is_screenspace(), true);
+
+	transform test_transform;
+	test_transform.set_location(vec(0.f, 0.f, 100.f));
+
+	emitter.transform.set_parent(test_transform);
+	EXPECT_EQ(emitter.transform.get_parent(), &test_transform);
+	EXPECT_EQ(emitter.transform.get_location(), vec(0.f, 0.f, 100.f));
+
+	emitter.transform.set_parent(nullptr);
+	EXPECT_EQ(emitter.transform.get_parent(), nullptr);
+}
+
+TEST(ParticleSystemTest, TestParticleLifetime)
+{
+	particles::type new_particle_type;
+	new_particle_type.id                        = "particles/lifetime_test";
+	new_particle_type.description.num_particles = 100;
+	new_particle_type.description.lifetimes     = 5.f;
+	EXPECT_EQ(particles::manager::get().add_type(new_screenspace_particle_type), true);
+
+	particles::emitter emitter;
+	emitter.create(new_particle_type.id);
+	EXPECT_EQ(emitter.is_alive(), true);
+	EXPECT_EQ(emitter.get_lifetime() == 5.f, true);
+
+	wait(emitter.get_lifetime());
+	EXPECT_EQ(emitter.is_alive(), false);
 }
 
 // Question 6: Write a boid system using any engine you prefer. You can use any libraries or tech you want.
