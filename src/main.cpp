@@ -1,4 +1,4 @@
-#include "types.hpp"
+#include "helpers.hpp"
 #include <array>
 #include <assert.h>
 #include <iostream>
@@ -259,8 +259,9 @@ TEST(ParticleSystemTest, TestParticleLifetime)
 // Question 7: Consider a parkour based movement system. What would be the MVP for such a system? What
 // features would you add immediately after MVP, and what features could you postpone?
 
-// Answer: I think the MVP for a parkour based movement system would just include non-networked movement for the listed
-// actions. I believe this is the MVP that would allow for testing and refinement of the movement code outside of
+// Answer: I think the MVP for a parkour based movement system would just include non-networked movement code for the listed
+// actions. The movement code would include collision checking, input bindings, and movement.
+// I believe this is the MVP that would allow for testing and refinement of the movement code outside of
 // animations and also allow level designers to experiment with movement possibilities.
 //
 // It would include:
@@ -273,7 +274,8 @@ TEST(ParticleSystemTest, TestParticleLifetime)
 // does not provide unique movement possibilities since you can accomplish the same action by crouch walking. As such,
 // I left it out of the MVP.
 //
-// I would immediately add animations after the MVP is completed. Networking and AI parkour movement support could be postponed.
+// I would immediately add animations after the MVP is completed. A few features that can be postponed are: AI support
+// for parkour movement, networking, and interop with other systems (such as shooting while parkouring)
 
 int main()
 {
