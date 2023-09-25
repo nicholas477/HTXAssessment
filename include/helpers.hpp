@@ -283,8 +283,6 @@ static double parabola_point_distance(double a, double b, double c, double px, d
 // Finds the minimum distance between a parabola and a point (px,py)
 // https://stackoverflow.com/questions/9800324/how-to-find-the-distance-between-a-point-and-a-parabola-in-code
 // Finds the real roots of the derivative of the squared distance function, and then returns the minimum distance
-//
-// TODO: add in code for rejecting distances with x < 0 since our parabola doesn't extend pass x < 0
 static double parabola_minimum_distance(double a, double b, double c, double px, double py)
 {
 	// Find the x^3, x^2, x coefficients
